@@ -11,7 +11,7 @@ CREATE TABLE users (
     -- GitHub-specific fields
     github_id TEXT UNIQUE,
     github_username TEXT,
-    github_access_token TEXT, -- encrypted beofre stored
+    github_access_token TEXT, -- encrypted before stored
     github_avatar_url TEXT
 );
 
