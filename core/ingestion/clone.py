@@ -65,10 +65,10 @@ def clone_repo(url, directory, branch=None):
     except subprocess.CalledProcessError as e:
         if os.path.exists(dest_path):
             shutil.rmtree(dest_path)
-        print(f"Error: Failed to clone repository: {e}")
+        print(f"Error: Failed to clone repository '{repo_name}' : {e}")
         return {
             "status": "error",
-            "message": "Failed to clone repository",
+            "message": f"Failed to clone repository '{repo_name}'",
             "error": str(e),
             "command": " ".join(cmd)
         }
