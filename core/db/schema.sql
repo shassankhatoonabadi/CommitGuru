@@ -22,7 +22,8 @@ CREATE TABLE repositories (
     url TEXT NOT NULL UNIQUE,
     local_path TEXT,
     is_public BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP,
+    ingested_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE commits (
@@ -31,17 +32,17 @@ CREATE TABLE commits (
     hash VARCHAR(50) UNIQUE NOT NULL,
     author_name VARCHAR(100),
     author_email VARCHAR(100),
-    authored_date TIMESTAMP,
+    authored_date TIMESTAMP, -- Date when the commit was authored
     committer_name VARCHAR(100),
     committer_email VARCHAR(100),
-    committed_date TIMESTAMP,
+    committed_date TIMESTAMP, -- Date when the commit was committed
     message TEXT,
     classification TEXT,  -- "fix", "feature"
-    is_merge BOOLEAN DEFAULT FALSE,
-    linked BOOLEAN DEFAULT FALSE,
+    is_merged BOOLEAN DEFAULT FALSE,
+    is_linked BOOLEAN DEFAULT FALSE,
     contains_bug BOOLEAN DEFAULT FALSE,
     fixes TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW() -- Date when the commit was ingested
 );
 
 CREATE TABLE feedback (
@@ -50,7 +51,6 @@ CREATE TABLE feedback (
     commit_id UUID REFERENCES commits(id) ON DELETE CASCADE,
     rating INTEGER CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
-    score INTEGER,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
