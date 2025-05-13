@@ -1,7 +1,6 @@
 import argparse
 import os
 import git
-import csv
 import json
 from thefuzz import fuzz
 
@@ -18,42 +17,41 @@ CATEGORY_PRIORITY = [
 # 100 means exact match
 FUZZ_THRESHOLD = 80
 
+HARDCODED_CATEGORIES = {
+    "Corrective": [
+        "fix", "bug", "error", "issue", "crash", "fail", "problem", "resolve", "patch", "repair", "defect", "broken", "debug"
+    ],
+    "Feature Addition": [
+        "add", "feature", "implement", "initial", "new", "create", "introduce", "build", "enable", "extend", "support"
+    ],
+    "Preventative": [
+        "test", "testing", "unittest", "junit", "coverage", "assert", "verify", "safety", "validation", "check"
+    ],
+    "Perfective": [
+        "clean", "refactor", "improve", "enhance", "optimize", "better", "rewrite", "update", "restructure", "tidy"
+    ],
+    "Non Functional": [
+        "doc", "documentation", "readme", "comment", "note", "merge", "changelog", "format", "license"
+    ]
+}
+
 def arguments():
     parser = argparse.ArgumentParser(description="Classify Git commits based on message content.")
     parser.add_argument("-p", required=True, type=str, help="Path to local Git repository")
     return parser.parse_args()
 
 class Category:
-    def __init__(self, file_path, name):
+    def __init__(self, name, keywords):
         self.name = name
-        self.keywords = self._load_keywords(file_path)
-
-    def _load_keywords(self, file_path):
-        keywords = set()
-        with open(file_path, "r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                for word in row:
-                    keywords.add(word.strip().lower())
-        return keywords
+        self.keywords = [kw.lower() for kw in keywords]
 
     def matches(self, message):
         msg = message.lower()
         return any(fuzz.partial_ratio(kw, msg) >= FUZZ_THRESHOLD for kw in self.keywords)
 
 class Classifier:
-    def __init__(self, category_dir=os.path.join(os.path.dirname(__file__), "..", "categories")):
-        self.categories = []
-        self.load_categories(category_dir)
-
-    def load_categories(self, directory):
-        self.categories = [
-            Category(os.path.join(directory, "corrective.csv"), "Corrective"),
-            Category(os.path.join(directory, "feature_addition.csv"), "Feature Addition"),
-            Category(os.path.join(directory, "preventative.csv"), "Preventative"),
-            Category(os.path.join(directory, "perfective.csv"), "Perfective"),
-            Category(os.path.join(directory, "non_functional.csv"), "Non Functional")
-        ]
+    def __init__(self):
+        self.categories = [Category(name, kws) for name, kws in HARDCODED_CATEGORIES.items()]
 
     def classify(self, message):
         matches = []
