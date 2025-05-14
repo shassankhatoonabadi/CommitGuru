@@ -4,17 +4,7 @@ import git
 import json
 from thefuzz import fuzz
 
-CATEGORY_PRIORITY = [
-    "Corrective",
-    "Feature Addition",
-    "Preventative",
-    "Perfective",
-    "Non Functional"
-]
-
 # fuzz matching tolerance
-# the higher the number, the more tolerant the match
-# 100 means exact match
 FUZZ_THRESHOLD = 80
 
 HARDCODED_CATEGORIES = {
@@ -54,14 +44,9 @@ class Classifier:
         self.categories = [Category(name, kws) for name, kws in HARDCODED_CATEGORIES.items()]
 
     def classify(self, message):
-        matches = []
         for category in self.categories:
             if category.matches(message):
-                matches.append(category.name)
-
-        for priority in CATEGORY_PRIORITY:
-            if priority in matches:
-                return priority
+                return category.name
         return "None"
 
 def classify_commits(repo_path):
