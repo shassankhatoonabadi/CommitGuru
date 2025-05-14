@@ -32,10 +32,10 @@ CREATE TABLE commits (
     hash VARCHAR(50) UNIQUE NOT NULL,
     author_name VARCHAR(100),
     author_email VARCHAR(100),
-    authored_at TIMESTAMP, -- Date when the commit was authored
+    authored_date TIMESTAMP, -- Date when the commit was authored
     committer_name VARCHAR(100),
     committer_email VARCHAR(100),
-    committed_at TIMESTAMP, -- Date when the commit was committed
+    committed_date TIMESTAMP, -- Date when the commit was committed
     message TEXT,
     classification TEXT,  -- "fix", "feature"
     is_merged BOOLEAN DEFAULT FALSE,
