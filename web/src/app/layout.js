@@ -1,7 +1,11 @@
+"use client"
+
 import "./globals.css"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import OfflineNotice from "@/components/OfflineNotice"
+import { Toaster } from "sonner"
+import { SessionProvider } from "next-auth/react"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,12 +17,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
-export const metadata = {
-  title: "Commit Guru",
-  description:
-    "Commit Guru delivers AI-powered Git commit analysis, code change insights, and productivity metrics for developers and teams.",
-}
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -26,9 +24,13 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <OfflineNotice />
+        <SessionProvider>
+
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
+          <Toaster position="bottom-right" richColors />
         </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   )
