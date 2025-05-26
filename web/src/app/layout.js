@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import OfflineNotice from "@/components/OfflineNotice"
 import { Toaster } from "sonner"
 import { SessionProvider } from "next-auth/react"
+import { Navbar } from "@/components/Layout/Navbar"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,13 +24,13 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        <OfflineNotice />
         <SessionProvider>
-
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-          <Toaster position="bottom-right" richColors />
-        </ThemeProvider>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <Navbar />
+            <OfflineNotice />
+            {children}
+            <Toaster position="bottom-right" richColors />
+          </ThemeProvider>
         </SessionProvider>
       </body>
     </html>

@@ -6,7 +6,6 @@ import { Github } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import ThemeToggle from "@/components/ThemeToggle"
 import { toast } from "sonner"
 
 export default function AuthPage() {
@@ -57,7 +56,6 @@ export default function AuthPage() {
   return (
     <main className="relative min-h-screen flex items-center justify-center bg-background text-foreground">
       <div className="absolute top-6 right-6 z-10">
-        <ThemeToggle />
       </div>
 
       <Card className="w-full max-w-md border border-border shadow-2xl backdrop-blur-lg bg-card/80">

@@ -1,3 +1,5 @@
+// Route for NextAuth authentication
+
 import NextAuth from "next-auth"
 import GitHubProvider from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
@@ -6,6 +8,7 @@ import {
   getUserByEmail,
   getUserByGithubId,
   createGithubUser,
+  updateGithubUser,
 } from "@/lib/db"
 
 export const authOptions = {
@@ -38,6 +41,8 @@ export const authOptions = {
           username: user.username,
           email: user.email,
           image: user.github_avatar_url,
+          role: user.role || "viewer",
+          isGithubUser: false,
         }
       },
     }),
@@ -68,6 +73,15 @@ export const authOptions = {
             github_email: fallbackEmail,
             hashedPassword: profile.id,
           })
+        } else {
+          if (existingUser.github_access_token !== account.access_token) {
+            await updateGithubUser({
+              github_id: githubId,
+              github_username: profile.login,
+              github_avatar_url: profile.avatar_url,
+              github_access_token: account.access_token,
+            })
+          }
         }
       }
 
@@ -82,6 +96,7 @@ export const authOptions = {
         token.username = user.username
         token.role = user.role || "developer"
         token.image = user.image
+        token.isGithubUser = account?.provider === "github"
       }
 
       if (account?.provider === "github" && profile?.id) {
@@ -92,7 +107,8 @@ export const authOptions = {
           token.name = dbUser.github_username
           token.username = dbUser.github_username
           token.image = dbUser.github_avatar_url
-          token.role = dbUser.role || "developer"
+          token.role = dbUser.role || "viewer"
+          token.isGithubUser = true
         }
       }
 
@@ -109,6 +125,7 @@ export const authOptions = {
       session.user.username = token.username
       session.user.role = token.role
       session.user.image = token.image
+      session.user.isGithubUser = token.isGithubUser
 
       console.log("Session Object:", session)
       return session
