@@ -8,7 +8,7 @@ import { RepoInput } from "@/components/RepoInput"
 export default function Home() {
   const { data: session } = useSession()
   const [repoUrl, setRepoUrl] = useState("")
-
+  
   const handleAnalyze = () => {
     if (!repoUrl.trim()) {
       toast.error("Please enter a repository URL.")
