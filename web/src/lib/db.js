@@ -40,3 +40,30 @@ export async function createGithubUser({ github_id, github_email, github_usernam
   )
   return res.rows[0]
 }
+
+export async function updateGithubUser({ github_id, github_access_token, github_username, github_avatar_url }) {
+  const res = await pool.query(
+    `
+    UPDATE users
+    SET 
+      github_access_token = $1,
+      github_username = $2,
+      github_avatar_url = $3
+    WHERE github_id = $4
+    RETURNING id, email, username
+    `,
+    [github_access_token, github_username, github_avatar_url, github_id]
+  )
+
+  return res.rows[0] || null
+}
+
+export async function getUserById(id) {
+  const res = await pool.query("SELECT * FROM users WHERE id = $1", [id])
+  return res.rows[0] || null
+}
+
+export async function getImportedRepoUrls() {
+  const res = await pool.query("SELECT url FROM repositories")
+  return res.rows.map((row) => row.url)
+}

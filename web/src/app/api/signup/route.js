@@ -1,3 +1,5 @@
+// ROute to handle user signup
+
 import { createUser, getUserByEmail, getUserByUsername } from "@/lib/users/db"
 
 export async function POST(req) {
