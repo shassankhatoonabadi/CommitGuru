@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChevronDown, ChevronUp, Star, GitBranch, Eye } from "lucide-react"
+import { useSession } from "next-auth/react"
 
 export default function ImportPage() {
   const [repos, setRepos] = useState([])
@@ -12,6 +13,7 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(true)
   const [expandedRepos, setExpandedRepos] = useState(new Set())
   const router = useRouter()
+  const { data: session } = useSession();
 
   useEffect(() => {
     const fetchRepos = async () => {
@@ -25,11 +27,29 @@ export default function ImportPage() {
     fetchRepos()
   }, [])
 
-  const handleAnalyze = (repo) => {
-    if (!repo.isImported) {
-      router.push(`/analyze?repo=${encodeURIComponent(repo.full_name)}`)
+  const handleAnalyze = async (repo) => {
+    if (repo.isImported) return;
+
+    const userId = session?.user?.id;
+
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        repoUrl: `https://github.com/${repo.full_name}.git`
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.jobId) {
+      router.push(`/analyze/${data.jobId}`);
+    } else {
+      alert("Failed to start analysis");
     }
-  }
+  };
+
 
   const toggleInfo = (repoId) => {
     const newSet = new Set(expandedRepos)

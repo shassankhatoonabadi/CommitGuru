@@ -1,32 +1,44 @@
-import { getToken } from "next-auth/jwt"
-import { NextResponse } from "next/server"
-import { getUserById } from "@/lib/db"
+import { NextResponse } from "next/server";
+import { Pool } from "pg";
+import { v4 as uuidv4 } from "uuid";
+import { makeWorkerUtils } from "graphile-worker";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export async function POST(req) {
-  try {
-    const token = await getToken({ req })
-    if (!token?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const { userId, repoUrl } = await req.json();
 
-    const { repo } = await req.json()
-    if (!repo) {
-      return NextResponse.json({ error: "Repository is required." }, { status: 400 })
-    }
-
-    const user = await getUserById(token.id)
-    if (!user?.github_access_token) {
-      return NextResponse.json({ error: "GitHub token not found." }, { status: 403 })
-    }
-
-    console.log(`equest received to analyze: ${repo}`)
-
-    return NextResponse.json({
-      success: true,
-      message: "Repository analysis started (stub).",
-    })
-  } catch (err) {
-    console.error("Error in /api/analyze:", err)
-    return NextResponse.json({ error: "Internal server error." }, { status: 500 })
+  console.log("request body:", req.body);
+  const repoRes = await pool.query("SELECT id FROM repositories WHERE url = $1", [repoUrl]);
+  let repoId;
+  if (repoRes.rows.length > 0) {
+    repoId = repoRes.rows[0].id;
+  } else {
+    const repoName = repoUrl.split("/").pop().replace(".git", "");
+    const insertRepo = await pool.query(
+      `INSERT INTO repositories (user_id, name, url, created_at)
+       VALUES ($1, $2, $3, NOW())
+       RETURNING id`,
+      [userId, repoName, repoUrl]
+    );
+    repoId = insertRepo.rows[0].id;
   }
+
+  const jobId = uuidv4();
+  await pool.query(
+    `INSERT INTO jobs (id, user_id, repository_id, status, created_at, updated_at)
+     VALUES ($1, $2, $3, 'queued', NOW(), NOW())`,
+    [jobId, userId, repoId]
+  );
+
+  const workerUtils = await makeWorkerUtils({ pgPool: pool });
+
+  await workerUtils.addJob("analyzeRepo", {
+    jobId,
+    repoId,
+    repoUrl,
+    userId
+  });
+
+  return NextResponse.json({ success: true, jobId });
 }
