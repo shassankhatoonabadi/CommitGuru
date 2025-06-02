@@ -66,8 +66,6 @@ export function RepoInput() {
     }
   }
 
-
-
   return (
     <section className="space-y-6 max-w-2xl mx-auto text-center">
       <h1 className="text-3xl font-bold">Analyze a GitHub Repository</h1>
