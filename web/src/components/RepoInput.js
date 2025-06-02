@@ -39,10 +39,31 @@ export function RepoInput() {
     signIn("github", { callbackUrl: "/import" })
   }
 
-  const handleUrlSubmit = (e) => {
+  const handleUrlSubmit2 = (e) => {
     e.preventDefault()
     if (!repoUrl.trim()) return
     router.push(`/analyze?repo=${encodeURIComponent(repoUrl.trim())}`)
+  }
+
+  const handleUrlSubmit = async (e) => {
+        e.preventDefault()
+
+      const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        repoUrl: repoUrl.trim(),
+        userId: session?.user?.id || null,
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.jobId) {
+      router.push(`/analyze/${data.jobId}`);
+    } else {
+      alert("Failed to start analysis");
+    }
   }
 
   return (

@@ -26,6 +26,18 @@ CREATE TABLE repositories (
     ingested_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  repository_id UUID REFERENCES repositories(id),
+  status TEXT CHECK (status IN ('queued', 'in_progress', 'completed', 'error')) NOT NULL DEFAULT 'queued',
+  step TEXT,
+  error TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  log TEXT
+);
+
 CREATE TABLE commits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     repository_id UUID REFERENCES repositories(id) ON DELETE CASCADE,

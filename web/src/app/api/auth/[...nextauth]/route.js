@@ -82,7 +82,6 @@ export const authOptions = {
               github_access_token: account.access_token,
             })
           }
-
         }
       }
 
@@ -110,7 +109,6 @@ export const authOptions = {
           token.image = dbUser.github_avatar_url
           token.role = dbUser.role || "viewer"
           token.isGithubUser = true
-          token.role = dbUser.role || "developer"
         }
       }
 
