@@ -12,7 +12,9 @@ export async function POST(req) {
   const repoRes = await pool.query("SELECT id FROM repositories WHERE url = $1", [repoUrl]);
   let repoId;
   if (repoRes.rows.length > 0) {
-    repoId = repoRes.rows[0].id;
+    console.log("Repository already exists, using existing ID");
+    const existingRepoLink = `https://github.com/${userId}/${repoUrl}`;
+    return NextResponse.json({ success: true, jobId: uuidv4(), existingRepoLink });
   } else {
     const repoName = repoUrl.split("/").pop().replace(".git", "");
     const insertRepo = await pool.query(
