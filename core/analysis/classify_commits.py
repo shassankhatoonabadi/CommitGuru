@@ -79,12 +79,16 @@ def classify_commits(repo_path):
             "classification": classification
         })
 
+    corrective_commits = [c for c in results if c["classification"] == "Corrective"]
+
     return {
         "status": "success",
         "repo_path": repo_path,
         "total_commits": len(results),
-        "commits": results
+        "commits": results,
+        "corrective_commits": corrective_commits
     }
+
 
 def main():
     args = arguments()
