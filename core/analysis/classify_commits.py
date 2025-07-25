@@ -3,26 +3,25 @@ import os
 import git
 import json
 from thefuzz import fuzz
-from datetime import datetime
 
 # fuzz matching tolerance
 FUZZ_THRESHOLD = 80
 
 HARDCODED_CATEGORIES = {
     "Corrective": [
-        "fix", "bug", "wrong", "fail", "problem"
+        "fix", "bug", "error", "issue", "crash", "fail", "problem", "resolve", "patch", "repair", "defect", "broken", "debug"
     ],
     "Feature Addition": [
-        "new", "add", "requirement", "initial", "create"
+        "add", "feature", "implement", "initial", "new", "create", "introduce", "build", "enable", "extend", "support"
     ],
     "Preventative": [
-        "test", "junit", "coverage", "assert"
+        "test", "testing", "unittest", "junit", "coverage", "assert", "verify", "safety", "validation", "check"
     ],
     "Perfective": [
-        "clean", "better"
+        "clean", "refactor", "improve", "enhance", "optimize", "better", "rewrite", "update", "restructure", "tidy"
     ],
     "Non Functional": [
-        "doc", "merge"
+        "doc", "documentation", "readme", "comment", "note", "merge", "changelog", "format", "license"
     ]
 }
 
@@ -37,8 +36,8 @@ class Category:
         self.keywords = [kw.lower() for kw in keywords]
 
     def matches(self, message):
-        words = message.lower().split()
-        return any(kw in word for word in words for kw in self.keywords)
+        msg = message.lower()
+        return any(fuzz.partial_ratio(kw, msg) >= FUZZ_THRESHOLD for kw in self.keywords)
 
 class Classifier:
     def __init__(self):
@@ -70,31 +69,17 @@ def classify_commits(repo_path):
     commits = list(repo.iter_commits('HEAD', reverse=True))
     classifier = Classifier()
     results = []
-    corrective_commits = []
 
     for commit in commits:
-        if len(commit.parents) > 1:
-            continue
         message = commit.message.strip()
         classification = classifier.classify(message)
-
-        commit_data = {
+        results.append({
             "hash": commit.hexsha,
             "message": message,
-            "classification": classification,
-            "author_name": commit.author.name,
-            "author_email": commit.author.email,
-            "authored_date": datetime.utcfromtimestamp(commit.authored_date).isoformat(),
-            "committer_name": commit.committer.name,
-            "committer_email": commit.committer.email,
-            "committed_date": datetime.utcfromtimestamp(commit.committed_date).isoformat(),
-            "parent_hashes": [p.hexsha for p in commit.parents]
-        }
+            "classification": classification
+        })
 
-        results.append(commit_data)
-
-        if classification == "Corrective":
-            corrective_commits.append(commit_data)
+    corrective_commits = [c for c in results if c["classification"] == "Corrective"]
 
     return {
         "status": "success",
@@ -103,6 +88,7 @@ def classify_commits(repo_path):
         "commits": results,
         "corrective_commits": corrective_commits
     }
+
 
 def main():
     args = arguments()
