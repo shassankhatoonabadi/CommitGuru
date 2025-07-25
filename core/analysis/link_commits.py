@@ -1,123 +1,95 @@
-import argparse
-import os
-import subprocess
-import git
-import json
-from classify_commits import Classifier
+import argparse, json, os, subprocess, sys, functools
+from collections import defaultdict
+from typing import Dict, List, Sequence
 
+# ─────────────────────────────  whitelist  ──────────────────────────────
+WHITELISTED_EXT = {
+    "ADA","ASM","AS","BAS","BAT","C","CC","CLJ","CPP","CS","CSON","CSS","CXX",
+    "D","DART","EL","ERL","F","F03","F77","F90","F95","FOR","FS","GO","GRADLE",
+    "GROOVY","H","HH","HPP","HXX","HS","HTM","HTML","HX","INI","IPYNB","JAVA",
+    "JS","JSON","JL","KT","KTS","L","LESS","LHS","LUA","M","MAKE","MD","ML",
+    "MM","NIM","PHP","PL","PM","PRO","PS1","PUG","PY","R","RBI","RB","RKT",
+    "RS","RST","S","SASS","SCALA","SCM","SCSS","SH","SLIM","SQL","SS","ST",
+    "SWIFT","TEX","TF","TS","TSX","V","VB","VBA","VBPROJ","VBX","VHD","VHDL"
+}
 
-def arguments():
-    parser = argparse.ArgumentParser(description="Link bug-inducing commits to fixes.")
-    parser.add_argument("-p", required=True, type=str, help="Path to local Git repository")
-    return parser.parse_args()
+class GitBackend:
+    def __init__(self, repo): 
+        if not os.path.isdir(os.path.join(repo, ".git")):
+            sys.exit(f"{repo} is not a git repo")
+        self.repo = os.path.abspath(repo)
 
-def get_corrective_commits(repo):
-    classifier = Classifier()
-    corrective = []
-    all_commits = list(repo.iter_commits('HEAD', reverse=True))
-    for commit in all_commits:
-        classification = classifier.classify(commit.message)
-        if classification == "Corrective":
-            corrective.append(commit)
-    return corrective, all_commits
+    def _run(self,*a:Sequence[str])->str:
+        try:
+            return subprocess.check_output(["git",*a],cwd=self.repo,
+                                           text=True,stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError as e:
+            sys.exit(f"git {' '.join(a)} failed: {e}")
 
-def get_modified_regions(commit, repo_path):
-    if not commit.parents:
-        # Handle initial commit, diff against empty tree
-        diff_cmd = f"git diff {commit.hexsha} --unified=0"
-    else:
-        diff_cmd = f"git diff {commit.hexsha}^ {commit.hexsha} --unified=0"
-    
-    try:
-        diff = subprocess.check_output(diff_cmd, shell=True, cwd=repo_path, executable="/bin/bash")
-    except subprocess.CalledProcessError:
-        return {}
+    @functools.lru_cache(maxsize=None)
+    def is_root(self,sha):  return len(self._run("rev-list","--parents","-n","1",sha).split())==1
+    @functools.lru_cache(maxsize=None)
+    def is_merge(self,sha): return len(self._run("rev-list","--parents","-n","1",sha).split())>2
 
-    diff = diff.decode("utf-8")
-    region_diff = {}
-    current_file = None
+    def modified_files(self,commit)->List[str]:
+        if self.is_root(commit): return []
+        files=self._run("diff",f"{commit}^",commit,"--name-only").splitlines()
+        return [f for f in files
+                if f and os.path.splitext(f)[1][1:].upper() in WHITELISTED_EXT]
 
-    for line in diff.splitlines():
-        if line.startswith("diff --git"):
-            parts = line.split(" b/")
-            if len(parts) > 1:
-                current_file = parts[1]
-                region_diff[current_file] = []
-        elif line.startswith("@@") and current_file:
-            parts = line.split("@@")
-            if len(parts) > 1:
-                location_info = parts[1].strip().split(" ")
-                for token in location_info:
-                    if token.startswith("+"):
-                        try:
-                            if "," in token:
-                                start_line, count = map(int, token[1:].split(","))
-                                region_diff[current_file].extend([str(i) for i in range(start_line, start_line + count)])
-                            else:
-                                region_diff[current_file].append(str(int(token[1:])))
-                        except ValueError:
-                            continue
-    return region_diff
+    def diff_regions(self,commit,files)->Dict[str,List[int]]:
+        if self.is_root(commit) or not files: return {}
+        diff=self._run("diff",f"{commit}^",commit,"--unified=0","--",*files).splitlines()
+        regions,cur,old=defaultdict(list),None,None
+        for ln in diff:
+            if ln.startswith("--- "):
+                p=ln[6:] if ln.startswith("--- a/") else ln[4:]
+                if p=="/dev/null": cur=None;continue
+                if p.startswith("a/"): p=p[2:]
+                cur=p if os.path.splitext(p)[1][1:].upper() in WHITELISTED_EXT else None
+                continue
+            if ln.startswith("@@"):
+                old=abs(int(ln.split(" ")[1].split(",")[0]));continue
+            if cur and ln.startswith("-") and not ln.startswith("---"):
+                regions[cur].append(old); old+=1
+        return regions
 
+    def blame(self,file,line,fix)->str:
+        out=self._run("blame","-l","--follow","-L",f"{line},+1",f"{fix}^","--",file)
+        return out.split(" ",1)[0].lstrip("^")
 
-def get_bug_inducing_commits(corrective_commit, all_commits, repo_path):
-    buggy_commits = set()
-    corrective_regions = get_modified_regions(corrective_commit, repo_path)
-    corrective_time = corrective_commit.committed_date
+class GitCommitLinker:
+    def __init__(self,repo): self.git=GitBackend(repo)
+    def link(self,fixes:List[str])->Dict[str,List[str]]:
+        mapping:Dict[str,List[str]]=defaultdict(list)
+        for fix in fixes:
+            for bug in self._link_one_fix(fix):
+                if self.git.is_merge(bug):
+                    continue
+                if fix not in mapping[bug]: mapping[bug].append(fix)
+        return mapping
+    def _link_one_fix(self,fix)->List[str]:
+        culprits=[]
+        for f,lines in self.git.diff_regions(fix,self.git.modified_files(fix)).items():
+            for ln in lines:
+                sha=self.git.blame(f,ln,fix)
+                if sha not in culprits: culprits.append(sha)
+        return culprits
 
-    for commit in all_commits:
-        if commit.committed_date >= corrective_time:
-            break
-
-        commit_regions = get_modified_regions(commit, repo_path)
-        for file, lines_fixed in corrective_regions.items():
-            if file in commit_regions:
-                lines_buggy = commit_regions[file]
-                # Check if there's an intersection of modified lines
-                if set(lines_fixed).intersection(lines_buggy):
-                    buggy_commits.add(commit.hexsha)
-                    break
-
-    return list(buggy_commits), corrective_regions
-
-def link_corrective_commits(repo_path):
-    if not os.path.isdir(repo_path):
-        return {
-            "status": "error",
-            "message": f"Invalid repo path: {repo_path}"
-        }
-
-    try:
-        repo = git.Repo(repo_path)
-    except git.exc.InvalidGitRepositoryError:
-        return {
-            "status": "error",
-            "message": "Not a valid Git repository"
-        }
-
-    corrective_commits, all_commits = get_corrective_commits(repo)
-    links = []
-    for corrective in corrective_commits:
-        linked, modified_regions = get_bug_inducing_commits(corrective, all_commits, repo_path)
-        links.append({
-            "fix_commit": corrective.hexsha,
-            "linked_to": linked,
-            "modified_regions": modified_regions
-        })
-
-    return {
-        "status": "success",
-        "repo_path": repo_path,
-        "linked_commits": links,
-        "total_fix_commits": len(corrective_commits)
-    }
-
+def load_corrective(p)->List[str]:
+    data=json.load(open(p))
+    if data and isinstance(data[0],str): return data
+    key="commit" if "commit" in data[0] else "hash"
+    return [d[key] for d in data]
 
 def main():
-    args = arguments()
-    result = link_corrective_commits(args.p)
-    print(json.dumps(result, indent=2))
+    ap=argparse.ArgumentParser()
+    ap.add_argument("repo"); ap.add_argument("--corrective",required=True)
+    ap.add_argument("--output",default="links.json")
+    a=ap.parse_args()
+    fixes=load_corrective(a.corrective)
+    res=[{"buggy_commit":b,"linked_to":l}
+         for b,l in GitCommitLinker(a.repo).link(fixes).items()]
+    json.dump(res,open(a.output,"w"),indent=2); print(json.dumps(res,indent=2))
 
-
-if __name__ == "__main__":
-    main()
+if __name__=="__main__": main()
