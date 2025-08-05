@@ -9,7 +9,7 @@ class CommitFile:
 	def __init__(self, name, loc, authors, lastchanged):
 		self.name = name												# File name
 		self.loc = loc													# LOC in file
-		self.authors = authors									# Array of authors
+		self.authors = set(authors)									# Array of authors
 		self.lastchanged = lastchanged					# unix time stamp of when last changed
 		self.nuc = 1
 
@@ -27,7 +27,7 @@ ALLOWED_EXT = {
 }
 ALLOWED_FILE = {"GRADLEW","MAKEFILE","CMAKE","CONFIGURE","RUN"}
 
-def extension_ok(fname: str) -> bool:
+def verify_extension(fname: str) -> bool:
     base = fname.rsplit("/", 1)[-1]          # strip path
     if "." in base:
         return base.rsplit(".",1)[1].upper() in ALLOWED_EXT
@@ -65,7 +65,8 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
             added = int(parts[0])
             deleted = int(parts[1])
         except ValueError:
-            continue
+            added = 0
+            deleted = 0
 
         fileName = parts[2].replace("'", '').replace('"', '').replace("\\", "")
         paths.append(fileName)
@@ -103,7 +104,7 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
             prevFile.loc += added - deleted
             prevFile.lastchanged = unixTimeStamp
             if author not in prevFile.authors:
-                prevFile.authors.append(author)
+                prevFile.authors.add(author)
             prevFile.nuc += 1  # ← increment first to reflect current commit
 
             # NUC: sum of prior changes (including current one)
@@ -120,7 +121,7 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
     nd = len(directoriesSeen)
     lt = lt / nf if nf > 0 else 0
     ndev = len(devs_touched)
-    AGE = sum(file_age_days) / len(file_age_days) if file_age_days else 0
+    age = sum(file_age_days) / len(file_age_days) if file_age_days else 0
 
     # Developer experience
     if author not in devExperience:
@@ -136,7 +137,7 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
         for loc in locModifiedPerFile:
             p = loc / totalLOCModified
             if p > 0:
-                entrophy -= p * math.log(p, 2)
+                entropy -= p * math.log(p, 2)
 
     return f', "la": {la}, "ld": {ld}, "lt": {lt}, "ns": {ns}, "nd": {nd}, "nf": {nf}, "entropy": {entropy}, "exp": {exp}, "ndev": {ndev}, "age": {age}, "nuc": {nuc}'
 
@@ -163,7 +164,7 @@ def log(repo_path):
         stats = [
             f"{mod.added_lines}\t{mod.deleted_lines}\t{mod.new_path or mod.old_path}"
             for mod in commit.modified_files
-            if extension_ok(mod.new_path or mod.old_path)
+            if verify_extension(mod.new_path or mod.old_path)
         ]
 
         author  = commit.author.name
