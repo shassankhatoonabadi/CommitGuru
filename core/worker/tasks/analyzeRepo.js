@@ -162,7 +162,7 @@ module.exports = async (payload) => {
   try {
     // 1. Clone repository
     await update(jobId, "Cloning repository");
-    const branch = 'AboutUsFragment'; // null for now, can be set to a specific branch later based on user input
+    const branch = null; // null for now, can be set to a specific branch later based on user input
     const cloneArgs = ["-u", repoUrl, "-d", "repos"];
     if (branch !== null && branch !== undefined) {
       console.log(`Cloning branch: ${branch}`);
