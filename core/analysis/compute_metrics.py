@@ -32,14 +32,6 @@ def verify_extension(fname: str) -> bool:
     if "." in base:
         return base.rsplit(".",1)[1].upper() in ALLOWED_EXT
     return base.upper() in ALLOWED_FILE
-
-def find_renamed_file(fileName, commitFiles):
-    fileBase = os.path.basename(fileName)
-    for existingFile in commitFiles:
-        if os.path.basename(existingFile) == fileBase:
-            # You can add further heuristics here if needed
-            return existingFile
-    return None
     
 def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTimeStamp, renamed_files):
     la = 0                      # Lines added   
