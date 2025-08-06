@@ -61,12 +61,12 @@ class GitBackend:
 class GitCommitLinker:
     def __init__(self,repo): self.git=GitBackend(repo)
     def link(self,fixes:List[str])->Dict[str,List[str]]:
-        mapping:Dict[str,List[str]]=defaultdict(list)
+        mapping:Dict[str,set]=defaultdict(set)
         for fix in fixes:
             for bug in self._link_one_fix(fix):
                 if self.git.is_merge(bug):
                     continue
-                if fix not in mapping[bug]: mapping[bug].append(fix)
+                if fix not in mapping[bug]: mapping[bug].add(fix)
         return mapping
     def _link_one_fix(self,fix)->List[str]:
         culprits=[]
@@ -88,8 +88,9 @@ def main():
     ap.add_argument("--output",default="links.json")
     a=ap.parse_args()
     fixes=load_corrective(a.corrective)
-    res=[{"buggy_commit":b,"linked_to":l}
-         for b,l in GitCommitLinker(a.repo).link(fixes).items()]
+    res=[{"buggy_commit":b,"linked_to":list(l)} 
+        for b,l in GitCommitLinker(a.repo).link(fixes).items()]
+
     json.dump(res,open(a.output,"w"),indent=2); print(json.dumps(res,indent=2))
 
 if __name__=="__main__": main()
