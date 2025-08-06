@@ -1,143 +1,194 @@
-import argparse
-import os
-import git
 import json
+import logging
+from pydriller import Repository
 import math
-from datetime import datetime
+import os
 
 class CommitFile:
-    def __init__(self, name, loc, authors, lastchanged):
-        self.name = name
-        self.loc = loc
-        self.authors = authors
-        self.lastchanged = lastchanged
-        self.nuc = 1
 
-def arguments():
-    parser = argparse.ArgumentParser(description="Compute commit-level metrics.")
-    parser.add_argument("-p", required=True, type=str, help="Path to local Git repository")
-    return parser.parse_args()
+	def __init__(self, name, loc, authors, lastchanged):
+		self.name = name												# File name
+		self.loc = loc													# LOC in file
+		self.authors = set(authors)									# Array of authors
+		self.lastchanged = lastchanged					# unix time stamp of when last changed
+		self.nuc = 1
 
-def compute_metrics(repo_path):
-    try:
-        repo = git.Repo(repo_path)
-    except git.exc.InvalidGitRepositoryError:
-        print(f"Not a valid Git repository: {repo_path}")
-        return []
+ALLOWED_EXT = {
+    # -------------- extensions --------------
+    "ADA","ADB","ADS","ASM","BAS","BB","BMX","C","CLJ","CLS","COB","CBL","CPP","CC","CXX",
+    "CBP","CS","CSPROJ","D","DBA","DBPRO123","E","EFS","EGT","EL","FOR","FTN","F","F77","F90",
+    "FRM","GO","H","HPP","HXX","HS","I","INC","JAVA","L","LGT","LISP","M","M4","ML","N","NB",
+    "P","PAS","PP","PHP","PHP3","PHP4","PHP5","PHPS","PHTML","PIV","PL","PM","PRG","PRO","PY","R",
+    "RB","RESX","RC","RC2","RKT","RKTL","SCI","SCE","SCM","SD7","SLN","SPIN","STK","SWG","TCL",
+    "VAP","VB","VBG","XPL","XQ","XSL","Y","AHK","APPLESCRIPT","AS","AU3","BAT","CMD","COFFEE",
+    "EGG","ERB","HTA","IBI","ICI","IJS","ITCL","JS","JSFL","LUA","MRC","NCF","NUT","PS1",
+    "PS1XML","PSC1","PSD1","PSM1","RDP","SCPT","SCPTD","SDL","SH","VBS","EBUILD","XML","GRADLE",
+    "PROPERTIES", "GITIGNORE", "NAME", "JSON", "CSV"
+}
+ALLOWED_FILE = {"GRADLEW","MAKEFILE","CMAKE","CONFIGURE","RUN"}
 
-    commits = list(repo.iter_commits('HEAD', reverse=True))
-    commit_files = {}
-    dev_experience = {}
+def verify_extension(fname: str) -> bool:
+    base = fname.rsplit("/", 1)[-1]          # strip path
+    if "." in base:
+        return base.rsplit(".",1)[1].upper() in ALLOWED_EXT
+    return base.upper() in ALLOWED_FILE
+    
+def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTimeStamp, renamed_files):
+    la = 0                      # Lines added   
+    ld = 0                      # Lines deleted
+    nf = 0                      # Number of files
+    ns = 0                      # Number of subsystems
+    nd = 0                      # Number of directories
+    lt = 0                      # Lines touched (average LOC per file)
+    age = 0                     # Average age of files in days
+    nuc = 0                     # Number of updates to files (including current commit)
+    paths = []
+    subsystemsSeen = set()
+    directoriesSeen = set()
+    locModifiedPerFile = []
+    devs_touched = set()
+    file_age_days = []
 
-    results = []
+    for stat in stats:
+        parts = stat.split("\t")
+        if len(parts) < 3:
+            continue
+        try:
+            added = int(parts[0])
+            deleted = int(parts[1])
+        except ValueError:
+            added = 0
+            deleted = 0
 
-    for commit in commits:
-        author = commit.author.name
-        timestamp = commit.committed_date
-        files = commit.stats.files
-        stats = commit.stats.total
+        fileName = parts[2].replace("'", '').replace('"', '').replace("\\", "")
+        paths.append(fileName)
 
-        la = stats.get('insertions', 0)
-        ld = stats.get('deletions', 0)
-        nf = len(files)
+        total_mod = added + deleted
+        la += added
+        ld += deleted
+        locModifiedPerFile.append(total_mod)
 
-        subsystems = set()
-        directories = set()
-        loc_modified_per_file = []
-        authors_touched = set()
-        lt = 0
-        age = 0
-        exp = 0
-        rexp = 0
-        sexp = 0
-        nuc = 0
+        fileDirs = fileName.split("/")
+        subsystem = fileDirs[0] if len(fileDirs) > 1 else "root"
+        directory = "/".join(fileDirs[:-1]) if len(fileDirs) > 1 else "root"
+        subsystemsSeen.add(subsystem)
+        directoriesSeen.add(directory)
 
-        for file_path, file_stat in files.items():
-            file_la = file_stat.get('insertions', 0)
-            file_ld = file_stat.get('deletions', 0)
-            total_mod = file_la + file_ld
-            loc_modified_per_file.append(total_mod)
+        # Handle renames
+        if fileName not in commitFiles:
+            renamed_from = renamed_files.get(fileName)
+            if renamed_from and renamed_from in commitFiles:
+                commitFiles[fileName] = commitFiles.pop(renamed_from)
 
-            file_dirs = file_path.split("/")
-            subsystem = file_dirs[0] if len(file_dirs) > 1 else "root"
-            directory = "/".join(file_dirs[:-1]) if len(file_dirs) > 1 else "root"
+        # --- Existing file ---
+        if fileName in commitFiles:
+            prevFile = commitFiles[fileName]
 
-            subsystems.add(subsystem)
-            directories.add(directory)
+            lt += prevFile.loc
+            devs_touched.update(prevFile.authors)
 
-            if file_path in commit_files:
-                f = commit_files[file_path]
-                lt += f.loc
-                nuc += f.nuc
-                for a in f.authors:
-                    authors_touched.add(a)
-                time_diff = (timestamp - f.lastchanged) / 86400
-                age += time_diff
-                f.loc += file_la - file_ld
-                f.lastchanged = timestamp
-                f.nuc += 1
-                if author not in f.authors:
-                    f.authors.append(author)
-            else:
-                commit_files[file_path] = CommitFile(file_path, file_la - file_ld, [author], timestamp)
-                age += 0
+            # AGE in days
+            delta_days = (unixTimeStamp - prevFile.lastchanged) / 86400
+            if delta_days >= 0:
+                file_age_days.append(delta_days)
 
-            if author in dev_experience:
-                exp += sum(dev_experience[author].values())
-                if subsystem in dev_experience[author]:
-                    sexp += dev_experience[author][subsystem]
-                    dev_experience[author][subsystem] += 1
-                else:
-                    dev_experience[author][subsystem] = 1
-                try:
-                    rexp += 1 / (age + 1)
-                except:
-                    rexp += 0
-            else:
-                dev_experience[author] = {subsystem: 1}
+            # Update file metadata first
+            prevFile.loc += added - deleted
+            prevFile.lastchanged = unixTimeStamp
+            if author not in prevFile.authors:
+                prevFile.authors.add(author)
+            prevFile.nuc += 1  # ← increment first to reflect current commit
 
-        ns = len(subsystems)
-        nd = len(directories)
-        ndev = len(authors_touched)
-        nf = nf or 1
-        lt = lt / nf
-        age = age / nf
-        exp = exp / nf
-        rexp = rexp / nf
+            # NUC: sum of prior changes (including current one)
+            nuc += prevFile.nuc
 
-        entropy = 0
-        total_loc_mod = sum(loc_modified_per_file)
-        for file_mod in loc_modified_per_file:
-            if file_mod > 0:
-                p = file_mod / total_loc_mod
+
+        # --- New file ---
+        else:
+            commitFiles[fileName] = CommitFile(fileName, added - deleted, [author], unixTimeStamp)
+            # Do not count nuc for new files
+
+    nf = len(paths)
+    ns = len(subsystemsSeen)
+    nd = len(directoriesSeen)
+    lt = lt / nf if nf > 0 else 0
+    ndev = len(devs_touched)
+    age = sum(file_age_days) / len(file_age_days) if file_age_days else 0
+
+    # Developer experience
+    if author not in devExperience:
+        devExperience[author] = {"total": 0, "timestamps": []}
+    exp = devExperience[author]["total"]
+    devExperience[author]["total"] += 1
+    devExperience[author]["timestamps"].append(unixTimeStamp)
+
+    # Entropy
+    totalLOCModified = sum(locModifiedPerFile)
+    entropy = 0
+    if totalLOCModified > 0:
+        for loc in locModifiedPerFile:
+            p = loc / totalLOCModified
+            if p > 0:
                 entropy -= p * math.log(p, 2)
 
-        metrics = {
-            "hash": commit.hexsha,
-            "ns": ns,
-            "nd": nd,
-            "nf": nf,
-            "entropy": entropy,
-            "la": la,
-            "ld": ld,
-            "lt": lt,
-            "ndev": ndev,
-            "age": age,
-            "nuc": nuc,
-            "exp": exp,
-            "rexp": rexp,
-            "sexp": sexp,
-            "computed_at": datetime.utcnow().isoformat()
+    return f', "la": {la}, "ld": {ld}, "lt": {lt}, "ns": {ns}, "nd": {nd}, "nf": {nf}, "entropy": {entropy}, "exp": {exp}, "ndev": {ndev}, "age": {age}, "nuc": {nuc}'
+
+def log(repo_path):
+    commitFiles   = {}
+    devExperience = {}
+    results       = []
+    renamed_files = {}
+    file_devs = {}
+
+
+    for commit in Repository(repo_path).traverse_commits():
+        if len(commit.parents) > 1:
+            continue
+
+        # Track actual file renames
+        for mod in commit.modified_files:
+            if mod.change_type.name == "RENAME":
+                old_path = mod.old_path
+                new_path = mod.new_path
+                if old_path and new_path:
+                    renamed_files[new_path] = old_path
+
+        stats = [
+            f"{mod.added_lines}\t{mod.deleted_lines}\t{mod.new_path or mod.old_path}"
+            for mod in commit.modified_files
+            if verify_extension(mod.new_path or mod.old_path)
+        ]
+
+        author  = commit.author.name
+        unix_ts = int(commit.author_date.timestamp())
+
+        stat_props_str = getCommitStatsProperties(
+            stats,
+            commitFiles,
+            devExperience,
+            author,
+            unix_ts,
+            renamed_files  # ← pass it here
+        )
+
+        commit_obj = {
+            "commit_hash": commit.hash,
+            "author":      author,
+            "author_date": commit.author_date.isoformat(),
+            "message":     commit.msg,
+            "stats":       metrics,
         }
+        results.append(commit_obj)
 
-        results.append(metrics)
-
+    logging.info("Done getting/parsing git commits.")
     return results
 
-def main():
-    args = arguments()
-    metrics = compute_metrics(args.p)
-    print(json.dumps(metrics, indent=2))
-
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--path", required=True, help="Path to local Git repository")
+    args = parser.parse_args()
+
+    output = log(args.path)
+    print(json.dumps(output, indent=2))

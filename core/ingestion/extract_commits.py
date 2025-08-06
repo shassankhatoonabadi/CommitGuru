@@ -27,9 +27,16 @@ def extract_commits(repo_path):
         }
 
     commits = list(repo.iter_commits('HEAD', reverse=True))
-
     result = []
+
     for commit in commits:
+        # Collect stats (numstat equivalent)
+        stats = commit.stats
+        total = stats.total
+        files_changed = list(stats.files.keys())
+        insertions = total.get("insertions", 0)
+        deletions = total.get("deletions", 0)
+
         commit_data = {
             "hash": commit.hexsha,
             "author_name": commit.author.name,
@@ -40,8 +47,12 @@ def extract_commits(repo_path):
             "committed_date": datetime.utcfromtimestamp(commit.committed_date).isoformat(),
             "message": commit.message.strip(),
             "parent_hashes": [p.hexsha for p in commit.parents],
-            "is_merge": len(commit.parents) > 1
+            "is_merge": len(commit.parents) > 1,
+            "files_changed": files_changed,
+            "lines_added": insertions,
+            "lines_deleted": deletions
         }
+
         result.append(commit_data)
 
     return {
