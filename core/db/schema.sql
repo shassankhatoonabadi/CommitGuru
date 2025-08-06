@@ -53,7 +53,7 @@ CREATE TABLE commits (
     is_merged BOOLEAN DEFAULT FALSE,
     is_linked BOOLEAN DEFAULT FALSE,
     contains_bug BOOLEAN DEFAULT FALSE,
-    fixes TEXT,
+    fixes JSONB,
     created_at TIMESTAMP DEFAULT NOW() -- Date when the commit was ingested
 );
 
@@ -84,7 +84,8 @@ CREATE TABLE metrics (
     sexp FLOAT DEFAULT 0,
     glm_probability FLOAT DEFAULT 0,
     hot_files TEXT[],
-    computed_at TIMESTAMP DEFAULT NOW()
+    computed_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (commit_id)
 );
 
 CREATE TABLE glm_coefficients (
@@ -97,3 +98,20 @@ CREATE TABLE glm_coefficients (
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(repository_id, model_version, feature_name)
 );
+
+CREATE OR REPLACE FUNCTION notify_job_update() RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify('job_updates', row_to_json(NEW)::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER job_update_trigger
+AFTER UPDATE ON jobs
+FOR EACH ROW
+WHEN (
+  OLD.status IS DISTINCT FROM NEW.status OR
+  OLD.step IS DISTINCT FROM NEW.step OR
+  OLD.error IS DISTINCT FROM NEW.error
+)
+EXECUTE FUNCTION notify_job_update();
