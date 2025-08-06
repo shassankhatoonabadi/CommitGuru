@@ -9,7 +9,7 @@ class CommitFile:
 	def __init__(self, name, loc, authors, lastchanged):
 		self.name = name												# File name
 		self.loc = loc													# LOC in file
-		self.authors = authors									# Array of authors
+		self.authors = set(authors)									# Array of authors
 		self.lastchanged = lastchanged					# unix time stamp of when last changed
 		self.nuc = 1
 
@@ -27,29 +27,21 @@ ALLOWED_EXT = {
 }
 ALLOWED_FILE = {"GRADLEW","MAKEFILE","CMAKE","CONFIGURE","RUN"}
 
-def extension_ok(fname: str) -> bool:
+def verify_extension(fname: str) -> bool:
     base = fname.rsplit("/", 1)[-1]          # strip path
     if "." in base:
         return base.rsplit(".",1)[1].upper() in ALLOWED_EXT
     return base.upper() in ALLOWED_FILE
-
-def find_renamed_file(fileName, commitFiles):
-    fileBase = os.path.basename(fileName)
-    for existingFile in commitFiles:
-        if os.path.basename(existingFile) == fileBase:
-            # You can add further heuristics here if needed
-            return existingFile
-    return None
     
 def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTimeStamp, renamed_files):
-    la = 0
-    ld = 0
-    nf = 0
-    ns = 0
-    nd = 0
-    lt = 0
-    AGE = 0
-    nuc = 0
+    la = 0                      # Lines added   
+    ld = 0                      # Lines deleted
+    nf = 0                      # Number of files
+    ns = 0                      # Number of subsystems
+    nd = 0                      # Number of directories
+    lt = 0                      # Lines touched (average LOC per file)
+    age = 0                     # Average age of files in days
+    nuc = 0                     # Number of updates to files (including current commit)
     paths = []
     subsystemsSeen = set()
     directoriesSeen = set()
@@ -65,7 +57,8 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
             added = int(parts[0])
             deleted = int(parts[1])
         except ValueError:
-            continue
+            added = 0
+            deleted = 0
 
         fileName = parts[2].replace("'", '').replace('"', '').replace("\\", "")
         paths.append(fileName)
@@ -99,15 +92,16 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
             if delta_days >= 0:
                 file_age_days.append(delta_days)
 
-            # NUC: sum of prior changes
-            nuc += prevFile.nuc
-
-            # Update file metadata
+            # Update file metadata first
             prevFile.loc += added - deleted
             prevFile.lastchanged = unixTimeStamp
             if author not in prevFile.authors:
-                prevFile.authors.append(author)
-            prevFile.nuc += 1  # ← increment after snapshot
+                prevFile.authors.add(author)
+            prevFile.nuc += 1  # ← increment first to reflect current commit
+
+            # NUC: sum of prior changes (including current one)
+            nuc += prevFile.nuc
+
 
         # --- New file ---
         else:
@@ -119,7 +113,7 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
     nd = len(directoriesSeen)
     lt = lt / nf if nf > 0 else 0
     ndev = len(devs_touched)
-    AGE = sum(file_age_days) / len(file_age_days) if file_age_days else 0
+    age = sum(file_age_days) / len(file_age_days) if file_age_days else 0
 
     # Developer experience
     if author not in devExperience:
@@ -130,14 +124,14 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
 
     # Entropy
     totalLOCModified = sum(locModifiedPerFile)
-    entrophy = 0
+    entropy = 0
     if totalLOCModified > 0:
         for loc in locModifiedPerFile:
             p = loc / totalLOCModified
             if p > 0:
-                entrophy -= p * math.log(p, 2)
+                entropy -= p * math.log(p, 2)
 
-    return f', "la": {la}, "ld": {ld}, "lt": {lt}, "ns": {ns}, "nd": {nd}, "nf": {nf}, "entrophy": {entrophy}, "exp": {exp}, "ndev": {ndev}, "age": {AGE}, "nuc": {nuc}'
+    return f', "la": {la}, "ld": {ld}, "lt": {lt}, "ns": {ns}, "nd": {nd}, "nf": {nf}, "entropy": {entropy}, "exp": {exp}, "ndev": {ndev}, "age": {age}, "nuc": {nuc}'
 
 def log(repo_path):
     commitFiles   = {}
@@ -162,7 +156,7 @@ def log(repo_path):
         stats = [
             f"{mod.added_lines}\t{mod.deleted_lines}\t{mod.new_path or mod.old_path}"
             for mod in commit.modified_files
-            if extension_ok(mod.new_path or mod.old_path)
+            if verify_extension(mod.new_path or mod.old_path)
         ]
 
         author  = commit.author.name
@@ -176,8 +170,6 @@ def log(repo_path):
             unix_ts,
             renamed_files  # ← pass it here
         )
-
-        metrics = json.loads("{" + stat_props_str.lstrip(",") + "}") if stat_props_str else {}
 
         commit_obj = {
             "commit_hash": commit.hash,

@@ -160,13 +160,18 @@ module.exports = async (payload) => {
   const targetDir = path.join("repos", repoName);
 
   try {
-    if (fs.existsSync(targetDir)) {
-      fs.rmSync(targetDir, { recursive: true, force: true });
-    }
-
     // 1. Clone repository
     await update(jobId, "Cloning repository");
-    await runPython("../ingestion/clone.py", ["-u", repoUrl, "-d", "repos", "-b", "main", "-t", token || ""]);
+    const branch = null; // null for now, can be set to a specific branch later based on user input
+    const cloneArgs = ["-u", repoUrl, "-d", "repos"];
+    if (branch !== null && branch !== undefined) {
+      console.log(`Cloning branch: ${branch}`);
+      cloneArgs.push("-b", branch);
+    }
+    if (token) {
+      cloneArgs.push("-t", token);
+    }
+    const cloneResultRaw = await runPython("../ingestion/clone.py", cloneArgs);
 
     // // 2. Extract and classify commits
     await update(jobId, "Extracting and classifying commits");
@@ -196,7 +201,7 @@ module.exports = async (payload) => {
       ns: entry.stats.ns || 0,
       nd: entry.stats.nd || 0,
       nf: entry.stats.nf || 0,
-      entropy: entry.stats.entrophy || 0,
+      entropy: entry.stats.entropy || 0,
       la: entry.stats.la || 0,
       ld: entry.stats.ld || 0,
       lt: entry.stats.lt || 0,
