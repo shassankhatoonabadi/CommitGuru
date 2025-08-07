@@ -2,6 +2,7 @@ const { Pool } = require("pg");
 const { execFile } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+require("dotenv").config({ path: path.resolve(__dirname, "../../../.env") });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
