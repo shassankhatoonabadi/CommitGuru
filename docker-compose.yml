@@ -14,7 +14,8 @@ services:
 
   backend:
     build:
-      context: ./core/worker
+      context: .
+      dockerfile: core/worker/Dockerfile
     working_dir: /app/core/worker
     command: sh -c "npx graphile-worker --schema-only --connection $$DATABASE_URL && node index.js"
     env_file:
