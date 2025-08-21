@@ -41,6 +41,7 @@ export function Navbar() {
         {/* Center: Nav Links */}
         <div className="absolute left-1/2 transform -translate-x-1/2 hidden lg:flex gap-x-12">
           <a href="/" className={linkClass('/')}>Home</a>
+          <a href="/repo" className={linkClass('/repo')}>Repositories</a>
           <a href="/dashboard" className={linkClass('/dashboard')}>Dashboard</a>
           <a href="/about" className={linkClass('/about')}>About</a>
         </div>
