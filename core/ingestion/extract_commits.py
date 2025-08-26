@@ -33,7 +33,7 @@ def extract_commits(repo_path):
         # Collect stats (numstat equivalent)
         stats = commit.stats
         total = stats.total
-        files_changed = list(stats.files.keys())
+        files_changed = list((stats.files or {}).keys())
         insertions = total.get("insertions", 0)
         deletions = total.get("deletions", 0)
 

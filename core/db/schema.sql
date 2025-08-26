@@ -54,7 +54,8 @@ CREATE TABLE commits (
     is_linked BOOLEAN DEFAULT FALSE,
     contains_bug BOOLEAN DEFAULT FALSE,
     fixes JSONB,
-    created_at TIMESTAMP DEFAULT NOW() -- Date when the commit was ingested
+    created_at TIMESTAMP DEFAULT NOW(), -- Date when the commit was ingested
+    files_changed TEXT[], -- Array of file paths changed in the commit
 );
 
 CREATE TABLE feedback (
