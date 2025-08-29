@@ -3,6 +3,7 @@ import os
 import git
 import json
 from thefuzz import fuzz
+from datetime import datetime
 
 # fuzz matching tolerance
 FUZZ_THRESHOLD = 80
@@ -73,10 +74,21 @@ def classify_commits(repo_path):
     for commit in commits:
         message = commit.message.strip()
         classification = classifier.classify(message)
+
+        stats = getattr(commit, 'stats', None)
+        files_changed = list((getattr(stats, "files", None) or {}).keys())
         results.append({
             "hash": commit.hexsha,
             "message": message,
-            "classification": classification
+            "classification": classification,
+            "author_name": getattr(commit.author, "name", None),
+            "author_email": getattr(commit.author, "email", None),
+            "authored_date": datetime.utcfromtimestamp(commit.authored_date).isoformat(),
+            "committer_name": getattr(commit.committer, "name", None),
+            "committer_email": getattr(commit.committer, "email", None),
+            "committed_date": datetime.utcfromtimestamp(commit.committed_date).isoformat(),
+            "is_merge": len(commit.parents) > 1,
+            "files_changed": files_changed,
         })
 
     corrective_commits = [c for c in results if c["classification"] == "Corrective"]

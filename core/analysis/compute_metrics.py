@@ -131,7 +131,13 @@ def getCommitStatsProperties(stats, commitFiles, devExperience, author, unixTime
             if p > 0:
                 entropy -= p * math.log(p, 2)
 
-    return f', "la": {la}, "ld": {ld}, "lt": {lt}, "ns": {ns}, "nd": {nd}, "nf": {nf}, "entropy": {entropy}, "exp": {exp}, "ndev": {ndev}, "age": {age}, "nuc": {nuc}'
+    return {
+        "la": la, "ld": ld, "lt": lt,
+        "ns": ns, "nd": nd, "nf": nf,
+        "entropy": entropy,
+        "exp": exp, "ndev": ndev, "age": age, "nuc": nuc,
+        "rexp": 0, "sexp": 0
+    }
 
 def log(repo_path):
     commitFiles   = {}
@@ -176,7 +182,7 @@ def log(repo_path):
             "author":      author,
             "author_date": commit.author_date.isoformat(),
             "message":     commit.msg,
-            "stats":       metrics,
+            "stats":       stat_props_str,
         }
         results.append(commit_obj)
 

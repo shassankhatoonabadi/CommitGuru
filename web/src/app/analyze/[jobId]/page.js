@@ -41,7 +41,7 @@ export default function AnalyzeStatusPage() {
       setError(error)
 
       if (status === "completed") {
-        setTimeout(() => router.push("/dashboard"), 2000)
+        setTimeout(() => router.push("/repo"), 2000)
       }
     }
 

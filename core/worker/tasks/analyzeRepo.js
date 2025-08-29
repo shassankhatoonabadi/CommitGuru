@@ -50,12 +50,23 @@ async function storeCommits(commits, repoId) {
       INSERT INTO commits (
         repository_id, hash, author_name, author_email, authored_date,
         committer_name, committer_email, committed_date, message,
-        classification, is_merged, created_at, contains_bug
+        classification, is_merged, files_changed, created_at, contains_bug
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9,
-        $10, $11, NOW(), FALSE
-      ) ON CONFLICT (hash) DO NOTHING
+        $10, $11, $12::text[], NOW(), FALSE
+      )
+      ON CONFLICT (hash) DO UPDATE SET
+        author_name     = EXCLUDED.author_name,
+        author_email    = EXCLUDED.author_email,
+        authored_date   = EXCLUDED.authored_date,
+        committer_name  = EXCLUDED.committer_name,
+        committer_email = EXCLUDED.committer_email,
+        committed_date  = EXCLUDED.committed_date,
+        message         = EXCLUDED.message,
+        classification  = EXCLUDED.classification,
+        is_merged       = EXCLUDED.is_merged,
+        files_changed   = EXCLUDED.files_changed
     `;
 
     for (const c of commits) {
@@ -70,12 +81,13 @@ async function storeCommits(commits, repoId) {
         c.committed_date,
         c.message,
         c.classification || "None",
-        c.is_merge || false
+        c.is_merge || false,
+        (Array.isArray(c.files_changed) && c.files_changed.length ? c.files_changed : null)
       ]);
     }
 
     await client.query("COMMIT");
-    return `${commits.length} commits inserted`;
+    return `${commits.length} commits inserted/updated`;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

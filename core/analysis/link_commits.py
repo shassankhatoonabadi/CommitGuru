@@ -19,10 +19,15 @@ class GitBackend:
             sys.exit(f"{repo} is not a git repo")
         self.repo = os.path.abspath(repo)
 
-    def _run(self,*a:Sequence[str])->str:
+    def _run(self, *a: Sequence[str]) -> str:
         try:
-            return subprocess.check_output(["git",*a],cwd=self.repo,
-                                           text=True,stderr=subprocess.DEVNULL)
+            return subprocess.check_output(
+                ["git", *a],
+                cwd=self.repo,
+                stderr=subprocess.DEVNULL,
+                encoding="utf-8",
+                errors="replace"
+            )
         except subprocess.CalledProcessError as e:
             sys.exit(f"git {' '.join(a)} failed: {e}")
 
