@@ -49,7 +49,7 @@ function MetricGroup({ title, children }) {
 
 export default function CommitItem({ commit }) {
   const [open, setOpen] = useState(false);
-  const isBuggy = !!commit.contains_bug;
+  const isBuggy = Array.isArray(commit.fixes) && commit.fixes.length > 0;
   const authoredOrCommitted = commit.authored_date || commit.committed_date;
 
   const totals = useMemo(() => ({
