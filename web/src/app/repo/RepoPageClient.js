@@ -60,7 +60,6 @@ export default function RepoPageClient() {
     setLoading(true);
     setErr("");
     try {
-      // ✅ plural API
       const res = await fetch(`/api/repo?${queryString}`, {
         signal,
         headers: owner === "me" ? { "x-user-id": "demo-user" } : {},
@@ -69,6 +68,9 @@ export default function RepoPageClient() {
       const json = await res.json();
       setData(json);
     } catch (e) {
+      if (e.name === "AbortError") {
+        return;
+      }
       console.error(e);
       setErr("Failed to load repositories.");
     } finally {
